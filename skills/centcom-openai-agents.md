@@ -13,7 +13,13 @@ Use this skill when a user wants OpenAI Agents SDK tool approvals routed through
 Set your CENTCOM API key before creating requests:
 
 ```bash
-CENTCOM_API_KEY=cc_live_xxx
+CENTCOM_API_KEY=your_centcom_api_key
+```
+
+If your bridge exposes a callback endpoint for CENTCOM events, set:
+
+```bash
+CENTCOM_WEBHOOK_SECRET=whsec_your_signing_secret
 ```
 
 Initialize the client from environment:
@@ -65,6 +71,7 @@ decision = centcom.wait_for_response(req["id"], interval=3, timeout=600)
 - Enforce `required_role` for sensitive tool classes.
 - Include idempotency key for retried request creation.
 - Do not lose run state between interruption and resume.
+- Verify webhook signatures for all CENTCOM callback endpoints.
 - Keep model-facing rejection messages explicit and safe.
 
 ## Common mistakes to avoid

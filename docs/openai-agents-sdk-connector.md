@@ -17,7 +17,13 @@ pip install centcom
 Never hardcode API keys in source code.
 
 ```bash
-CENTCOM_API_KEY=cc_live_xxx
+CENTCOM_API_KEY=your_centcom_api_key
+```
+
+If your integration receives CENTCOM callbacks, also configure webhook signature verification:
+
+```bash
+CENTCOM_WEBHOOK_SECRET=whsec_your_signing_secret
 ```
 
 ## Recommended flow
@@ -72,6 +78,7 @@ while result.interruptions:
 - Use `required_role` for sensitive tool categories (`manager`/`admin`).
 - Add idempotency protection when creating approval requests on retries.
 - Persist serialized run state for long-lived approvals.
+- Verify webhook signatures on any callback endpoint that receives CENTCOM events.
 - Keep rejection messages explicit so the model handles refusal safely.
 - Do not include raw secrets in interruption metadata.
 
