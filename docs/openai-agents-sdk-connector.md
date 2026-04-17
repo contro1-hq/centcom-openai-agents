@@ -1,6 +1,6 @@
 # OpenAI Agents SDK Connector Guide
 
-This guide shows how to connect OpenAI Agents SDK HITL interruptions with CENTCOM approvals.
+This guide shows how to connect OpenAI Agents SDK HITL interruptions with Contro1 approvals using Integration Protocol v1.
 
 ## Prerequisites
 
@@ -18,20 +18,27 @@ Never hardcode API keys in source code.
 
 ```bash
 CENTCOM_API_KEY=your_centcom_api_key
-```
-
-If your integration receives CENTCOM callbacks, also configure webhook signature verification:
-
-```bash
+CENTCOM_BASE_URL=https://api.contro1.com/api/centcom/v1
 CENTCOM_WEBHOOK_SECRET=whsec_your_signing_secret
 ```
 
 ## Recommended flow
 
 1. Mark sensitive tools with `needs_approval`.
-2. When interruptions appear, create a CENTCOM request for each interruption.
-3. Receive operator decision and apply `state.approve(...)` or `state.reject(...)`.
+2. When interruptions appear, create a Contro1 **protocol** request for each interruption.
+3. Receive operator decision and apply `state.approve(...)` or `state.reject(...)` (or instruction-mode handling).
 4. Resume with `Runner.run(agent, state)`.
+
+## Starter kit
+
+Use `examples/openai_agents_bridge.py` for a local runnable bridge template.
+
+It includes:
+
+- request creation in protocol v1 shape
+- signature verification for callbacks
+- deterministic idempotency key by `run_id + call_id`
+- resume mapping placeholder (`approve` / `reject`)
 
 ## End-to-end example
 
