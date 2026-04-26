@@ -20,7 +20,7 @@ load_dotenv()
 app = Flask(__name__)
 
 CENTCOM_API_KEY = os.environ["CENTCOM_API_KEY"]
-CENTCOM_BASE_URL = os.environ.get("CENTCOM_BASE_URL", "https://contro1.com/api/centcom/v1")
+CENTCOM_BASE_URL = os.environ.get("CENTCOM_BASE_URL", "https://api.contro1.com/api/centcom/v1")
 CENTCOM_WEBHOOK_SECRET = os.environ["CENTCOM_WEBHOOK_SECRET"]
 PORT = int(os.environ.get("BRIDGE_PORT", "8081"))
 
