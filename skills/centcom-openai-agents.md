@@ -65,10 +65,19 @@ req = centcom.create_request(
     question=f"Approve tool call: {interruption.name}?",
     context=f"Arguments: {interruption.arguments}",
     required_role="manager",
+    approval_policy={
+        "mode": "threshold",
+        "required_approvals": 2,
+        "required_roles": ["manager", "admin"],
+        "separation_of_duties": True,
+        "fail_closed_on_timeout": True,
+    },
     metadata={"tool_name": interruption.name, "call_id": interruption.call_id},
 )
 decision = centcom.wait_for_response(req["id"], interval=3, timeout=600)
 ```
+
+For sensitive tools, use `approval_policy` so the agent resumes only after quorum. Partial approvals are visible in Contro1 Activity but are not final decisions.
 
 ## Decision mapping
 
@@ -78,6 +87,7 @@ decision = centcom.wait_for_response(req["id"], interval=3, timeout=600)
 ## Production checklist
 
 - Enforce `required_role` for sensitive tool classes.
+- Require two-person approval for production deploy, vendor payment, bulk data deletion, and privilege escalation tools.
 - Include idempotency key for retried request creation.
 - Do not lose run state between interruption and resume.
 - Verify webhook signatures for all CENTCOM callback endpoints.
@@ -88,3 +98,4 @@ decision = centcom.wait_for_response(req["id"], interval=3, timeout=600)
 - Creating duplicate approval requests for the same interruption.
 - Resuming with the wrong run state object.
 - Not handling mixed outcomes when multiple interruptions exist.
+- Resuming the agent after the first approval while quorum is still pending.
