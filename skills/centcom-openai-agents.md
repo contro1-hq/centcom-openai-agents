@@ -1,3 +1,37 @@
+# Contro1 OpenAI Agents Skill
+
+Use this when adding Contro1 to an OpenAI Agents SDK project.
+
+## Rules
+
+- Use `create_protocol_request` for tool calls that must wait for a human decision.
+- Use `log_action` for autonomous actions that were already allowed by policy.
+- Generate or derive one stable `thread_id` per OpenAI run and pass it to every related request or audit record.
+- When mapping an operator callback back into the OpenAI run, call `log_action(..., in_reply_to={"type": "request", "id": request_id})` so the dashboard thread shows the full story.
+- Keep `external_request_id` scoped to the specific tool call, not the whole thread.
+
+## Pattern
+
+```python
+thread_id = f"thr_openai_{stable_hash(run_id)}"
+
+request = client.create_protocol_request({
+    "title": f"Approve tool call: {tool_name}",
+    "request_type": "decision",
+    "source": {"integration": "openai-agents", "run_id": run_id},
+    "continuation": {"mode": "decision", "callback_url": callback_url},
+    "external_request_id": f"openai:{run_id}:{call_id}",
+    "thread_id": thread_id,
+})
+
+client.log_action(
+    action="openai_agents.tool_result_mapped",
+    summary="Mapped operator answer back to OpenAI Agents state",
+    source={"integration": "openai-agents", "run_id": run_id},
+    thread_id=thread_id,
+    in_reply_to={"type": "request", "id": request["id"]},
+)
+```
 ---
 name: centcom-openai-agents
 description: Guide for integrating OpenAI Agents SDK HITL interruptions with CENTCOM approvals and resume flow.
@@ -38,7 +72,7 @@ CENTCOM sends the operator's decision to a URL you own. Expose an endpoint that:
 2. Reads `approved` / `value` from the payload body.
 3. Resumes the paused agent run.
 
-See `examples/openai_agents_bridge.py` for a runnable webhook template.
+Use the runnable webhook template at https://github.com/contro1-hq/centcom-openai-agents/blob/main/examples/openai_agents_bridge.py.
 
 ## What to build
 
@@ -99,3 +133,11 @@ For sensitive tools, use `approval_policy` so the agent resumes only after quoru
 - Resuming with the wrong run state object.
 - Not handling mixed outcomes when multiple interruptions exist.
 - Resuming the agent after the first approval while quorum is still pending.
+
+## Full reference links
+
+- Repo: https://github.com/contro1-hq/centcom-openai-agents
+- Runnable bridge example: https://github.com/contro1-hq/centcom-openai-agents/blob/main/examples/openai_agents_bridge.py
+- Skill file source: https://github.com/contro1-hq/centcom-openai-agents/blob/main/skills/centcom-openai-agents.md
+- Core Python SDK: https://github.com/contro1-hq/centcom
+- Protocol docs: https://contro1.com/docs/audit-records-and-threads

@@ -63,3 +63,46 @@ Expected behavior:
 
 - [`centcom`](https://github.com/contro1-hq/centcom)
 - [`centcom-langgraph`](https://github.com/contro1-hq/centcom-langgraph)
+
+## Human review vs audit log
+
+Use a Contro1 request when a tool call needs a human before it executes:
+
+```python
+created = client.create_protocol_request({
+    "title": "Approve tool call: issue_refund",
+    "request_type": "decision",
+    "source": {"integration": "openai-agents", "run_id": run_id},
+    "continuation": {"mode": "decision", "callback_url": callback_url},
+    "external_request_id": f"openai:{run_id}:{call_id}",
+    "thread_id": thread_id,
+})
+```
+
+Use `log_action` when the agent already acted within policy and you only need a searchable audit record:
+
+```python
+client.log_action(
+    action="openai_agents.email_sent",
+    summary="Sent approved follow-up email to customer c-8821",
+    source={"integration": "openai-agents", "run_id": run_id},
+    outcome="success",
+    thread_id=thread_id,
+)
+```
+
+## Threaded follow-up
+
+When an operator answers and the bridge maps that answer back into the OpenAI run, log that mapping in the same thread:
+
+```python
+client.log_action(
+    action="openai_agents.tool_approve",
+    summary="Operator decision mapped to OpenAI Agents approval",
+    source={"integration": "openai-agents", "workflow_id": call_id, "run_id": run_id},
+    thread_id=thread_id,
+    in_reply_to={"type": "request", "id": request_id},
+)
+```
+
+See the full bridge example at https://github.com/contro1-hq/centcom-openai-agents/blob/main/examples/openai_agents_bridge.py.

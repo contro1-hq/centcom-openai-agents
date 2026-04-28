@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
 from typing import Any
 
 from centcom import CentcomClient, verify_webhook
@@ -30,6 +31,12 @@ client = CentcomClient(api_key=CENTCOM_API_KEY, base_url=CENTCOM_BASE_URL)
 PENDING: dict[str, str] = {}
 
 
+def contro1_thread_id(value: str) -> str:
+    if value.startswith("thr_") and len(value) <= 68:
+        return value
+    return f"thr_openai_{hashlib.sha256(value.encode('utf-8')).hexdigest()[:32]}"
+
+
 @app.post("/simulate-interruption")
 def simulate_interruption():
     payload = request.get_json(force=True, silent=False) or {}
@@ -40,6 +47,8 @@ def simulate_interruption():
 
     if not run_id or not call_id:
         return jsonify({"error": "run_id and call_id are required"}), 400
+
+    thread_id = contro1_thread_id(run_id)
 
     protocol_request = {
         "title": f"Approve tool call: {tool_name}",
@@ -63,9 +72,11 @@ def simulate_interruption():
             "callback_url": f"http://localhost:{PORT}/centcom-callback",
         },
         "external_request_id": f"openai:{run_id}:{call_id}",
+        "thread_id": thread_id,
         "metadata": {
             "run_id": run_id,
             "call_id": call_id,
+            "contro1_thread_id": thread_id,
         },
     }
 
@@ -95,6 +106,22 @@ def centcom_callback():
     response = payload.get("response") or {}
     approved = bool(response.get("approved")) if isinstance(response, dict) else False
     action = "approve" if approved else "reject"
+    metadata = payload.get("metadata") or {}
+    thread_id = str(metadata.get("contro1_thread_id") or "")
+
+    if thread_id and payload.get("request_id"):
+        client.log_action(
+            action=f"openai_agents.tool_{action}",
+            summary=f"Operator decision mapped to OpenAI Agents action={action}",
+            source={
+                "integration": "openai-agents",
+                "workflow_id": str(metadata.get("call_id") or "tool_call"),
+                "run_id": str(metadata.get("run_id") or ""),
+            },
+            outcome="success",
+            thread_id=thread_id,
+            in_reply_to={"type": "request", "id": payload["request_id"]},
+        )
 
     # Replace this with actual OpenAI Agents run-state resume calls:
     # state.approve(interruption) / state.reject(interruption, ...)
