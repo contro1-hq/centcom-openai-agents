@@ -6,14 +6,15 @@ Use this when adding Contro1 to an OpenAI Agents SDK project.
 
 - Use `create_protocol_request` for tool calls that must wait for a human decision.
 - Use `log_action` for autonomous actions that were already allowed by policy.
-- Generate or derive one stable `thread_id` per OpenAI run and pass it to every related request or audit record.
-- When mapping an operator callback back into the OpenAI run, call `log_action(..., in_reply_to={"type": "request", "id": request_id})` so the dashboard thread shows the full story.
-- Keep `external_request_id` scoped to the specific tool call, not the whole thread.
+- Derive one stable `correlation_id` per OpenAI run and pass it to every related request and audit record. Use `f"openai-{run_id}"` or any stable string that ties to the run.
+- When mapping an operator callback back into the OpenAI run, call `log_action(..., in_reply_to={"type": "request", "id": request_id})` so the dashboard case shows the full story.
+- `in_reply_to` must reference an item in the same organization; if you send both `correlation_id` and `in_reply_to`, they must belong to the same case.
+- Keep `external_request_id` scoped to the specific tool call, not the whole run.
 
 ## Pattern
 
 ```python
-thread_id = f"thr_openai_{stable_hash(run_id)}"
+case_id = f"openai-{run_id}"
 
 request = client.create_protocol_request({
     "title": f"Approve tool call: {tool_name}",
@@ -21,17 +22,18 @@ request = client.create_protocol_request({
     "source": {"integration": "openai-agents", "run_id": run_id},
     "continuation": {"mode": "decision", "callback_url": callback_url},
     "external_request_id": f"openai:{run_id}:{call_id}",
-    "thread_id": thread_id,
+    "correlation_id": case_id,
 })
 
 client.log_action(
     action="openai_agents.tool_result_mapped",
     summary="Mapped operator answer back to OpenAI Agents state",
     source={"integration": "openai-agents", "run_id": run_id},
-    thread_id=thread_id,
+    correlation_id=case_id,
     in_reply_to={"type": "request", "id": request["id"]},
 )
 ```
+
 ---
 name: centcom-openai-agents
 description: Guide for integrating OpenAI Agents SDK HITL interruptions with CENTCOM approvals and resume flow.
@@ -79,9 +81,30 @@ Use the runnable webhook template at https://github.com/contro1-hq/centcom-opena
 Implement a deterministic approval bridge:
 
 1. Detect tool interruptions (`result.interruptions`).
-2. Create CENTCOM approval request per interruption.
-3. Apply operator decision to run state.
-4. Resume the same run from state.
+2. Check Control Map routing before creating approval requests (see below).
+3. Create CENTCOM approval request per interruption.
+4. Apply operator decision to run state.
+5. Resume the same run from state.
+
+## Check routing before submitting (Control Map)
+
+For sensitive tools with required roles or multi-person approval, verify routing is ready before submitting the request. Cache the result for 5–15 minutes.
+
+```python
+preview = centcom.post("/requests/control-map", {
+    "approval_requirements": {"required_roles": ["manager"], "required_approvals": 2},
+    "approval_policy": {
+        "mode": "threshold",
+        "required_approvals": 2,
+        "separation_of_duties": True,
+        "fail_closed_on_timeout": True,
+    },
+})
+
+if not preview["satisfiable"]:
+    # preview["warnings"] describes the gap; preview["suggested_action"] explains what to fix
+    raise RuntimeError(f"Cannot route review: {preview['warnings']}")
+```
 
 ## Implementation steps
 
@@ -106,6 +129,8 @@ req = centcom.create_request(
         "separation_of_duties": True,
         "fail_closed_on_timeout": True,
     },
+    external_request_id=f"openai:{run_id}:{interruption.call_id}",
+    correlation_id=f"openai-{run_id}",
     metadata={"tool_name": interruption.name, "call_id": interruption.call_id},
 )
 decision = centcom.wait_for_response(req["id"], interval=3, timeout=600)
@@ -122,7 +147,7 @@ For sensitive tools, use `approval_policy` so the agent resumes only after quoru
 
 - Enforce `required_role` for sensitive tool classes.
 - Require two-person approval for production deploy, vendor payment, bulk data deletion, and privilege escalation tools.
-- Include idempotency key for retried request creation.
+- Include idempotency key (`external_request_id`) for retried request creation.
 - Do not lose run state between interruption and resume.
 - Verify webhook signatures for all CENTCOM callback endpoints.
 - Keep model-facing rejection messages explicit and safe.
@@ -134,10 +159,52 @@ For sensitive tools, use `approval_policy` so the agent resumes only after quoru
 - Not handling mixed outcomes when multiple interruptions exist.
 - Resuming the agent after the first approval while quorum is still pending.
 
+## Production pattern: Agent Plugin
+
+Wrap Contro1 calls behind a plugin to reduce per-call token overhead and standardize policy across your agent:
+
+```python
+from datetime import datetime, timedelta
+from centcom import CentcomClient
+
+class Contro1Plugin:
+    def __init__(self, client: CentcomClient, cache_ttl_minutes: int = 10):
+        self._client = client
+        self._cache: dict = {}
+        self._ttl = timedelta(minutes=cache_ttl_minutes)
+
+    def preview_policy(self, approval_requirements: dict, approval_policy: dict) -> dict:
+        key = str(sorted(approval_requirements.items()))
+        cached = self._cache.get(key)
+        if cached and datetime.utcnow() < cached["expires"]:
+            return cached["data"]
+        result = self._client.post("/requests/control-map", {
+            "approval_requirements": approval_requirements,
+            "approval_policy": approval_policy,
+        })
+        self._cache[key] = {"data": result, "expires": datetime.utcnow() + self._ttl}
+        return result
+
+    def request_human_review(self, payload: dict) -> dict:
+        return self._client.create_protocol_request(payload)
+
+    def log_audit_action(self, payload: dict) -> dict:
+        return self._client.log_action(**payload)
+
+    def resume_from_decision(self, case_id: str) -> dict:
+        return self._client.get(f"/cases/{case_id}")
+```
+
 ## Full reference links
 
 - Repo: https://github.com/contro1-hq/centcom-openai-agents
 - Runnable bridge example: https://github.com/contro1-hq/centcom-openai-agents/blob/main/examples/openai_agents_bridge.py
 - Skill file source: https://github.com/contro1-hq/centcom-openai-agents/blob/main/skills/centcom-openai-agents.md
 - Core Python SDK: https://github.com/contro1-hq/centcom
-- Protocol docs: https://contro1.com/docs/audit-records-and-threads
+- Protocol docs: https://contro1.com/docs/audit-records-and-cases
+
+## Governance readiness
+
+For teams operating under EU or US AI governance requirements, see:
+- https://contro1.com/guides/eu-ai-act-readiness
+- https://contro1.com/guides/us-ai-governance-readiness
