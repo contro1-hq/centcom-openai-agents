@@ -201,6 +201,7 @@ class Contro1Plugin:
 - Runnable bridge example: https://github.com/contro1-hq/centcom-openai-agents/blob/main/examples/openai_agents_bridge.py
 - Skill file source: https://github.com/contro1-hq/centcom-openai-agents/blob/main/skills/centcom-openai-agents.md
 - Core Python SDK: https://github.com/contro1-hq/centcom
+- Microsoft AGT companion skill: https://github.com/contro1-hq/contro1-microsoft-agent-governance-toolkit-integration/blob/main/skills/contro1-microsoft-agent-governance-toolkit-integration.md
 - Protocol docs: https://contro1.com/docs/audit-records-and-cases
 
 ## Governance readiness

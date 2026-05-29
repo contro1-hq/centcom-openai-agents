@@ -165,6 +165,7 @@ class Contro1Plugin:
 
 - [`centcom`](https://github.com/contro1-hq/centcom)
 - [`centcom-langgraph`](https://github.com/contro1-hq/centcom-langgraph)
+- [`contro1-microsoft-agent-governance-toolkit-integration`](https://github.com/contro1-hq/contro1-microsoft-agent-governance-toolkit-integration)
 
 ## Governance readiness
 
