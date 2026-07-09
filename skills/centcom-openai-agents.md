@@ -81,14 +81,14 @@ Use the runnable webhook template at https://github.com/contro1-hq/centcom-opena
 Implement a deterministic approval bridge:
 
 1. Detect tool interruptions (`result.interruptions`).
-2. Check Control Map routing before creating approval requests (see below).
+2. Optionally check Control Map routing for complex role/quorum requests (see below).
 3. Create CENTCOM approval request per interruption.
 4. Apply operator decision to run state.
 5. Resume the same run from state.
 
-## Check routing before submitting (Control Map)
+## Preview routing when needed (Control Map)
 
-For sensitive tools with required roles or multi-person approval, verify routing is ready before submitting the request. Cache the result for 5–15 minutes.
+For sensitive tools with required roles or multi-person approval, Control Map can preview routing readiness. Cache the result for 5-15 minutes.
 
 ```python
 preview = centcom.post("/requests/control-map", {
@@ -102,8 +102,8 @@ preview = centcom.post("/requests/control-map", {
 })
 
 if not preview["satisfiable"]:
-    # preview["warnings"] describes the gap; preview["suggested_action"] explains what to fix
-    raise RuntimeError(f"Cannot route review: {preview['warnings']}")
+    # preview["warnings"] describes the setup gap.
+    print("Routing setup needed:", preview["warnings"])
 ```
 
 ## Implementation steps
