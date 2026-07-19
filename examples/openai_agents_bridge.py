@@ -44,6 +44,13 @@ def simulate_interruption():
     call_id = str(payload.get("call_id", "")).strip()
     tool_name = str(payload.get("tool_name", "tool_call")).strip()
     arguments: Any = payload.get("arguments", {})
+    # In a real tool, "reason" is a required parameter on the tool's own function
+    # signature (e.g. `async def cancel_order(order_id: int, reason: str)`), so the
+    # model supplies it as part of the same tool call that produced `arguments`.
+    reason = str(arguments.get("reason", "")) if isinstance(arguments, dict) else ""
+    # The run's triggering user message/event - passed here for the demo since this
+    # endpoint only simulates a single interruption in isolation.
+    triggered_by = str(payload.get("triggered_by", "")).strip() or "Simulated OpenAI Agents interruption"
 
     if not run_id or not call_id:
         return jsonify({"error": "run_id and call_id are required"}), 400
@@ -63,9 +70,13 @@ def simulate_interruption():
             "priority": "normal",
         },
         "context": {
-            "tool_name": tool_name,
-            "tool_input": arguments,
-            "summary": "OpenAI Agents interruption requires operator approval",
+            "action": {"tool": tool_name, "input": arguments},
+            "machine_observed": {
+                "triggered_by": triggered_by,
+            },
+            "agent_reported": {
+                "justification": reason,
+            },
         },
         "continuation": {
             "mode": "decision",
